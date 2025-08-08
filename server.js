@@ -14,23 +14,29 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static('public'));
 
+// --- TikTok Webhook (NEW) ---
+// TikTok will POST events here. Also respond to GET so the "Test URL" button works.
+app.get('/webhook/tiktok', (req, res) => res.status(200).send('OK'));
+app.post('/webhook/tiktok', (req, res) => {
+  console.log('TikTok Webhook Event:', req.body);
+  // TODO: add signature verification when you’re ready
+  res.status(200).send('OK');
+});
+
 // Simple storage for demo uploads (memory or disk)
 const upload = multer({ dest: 'uploads/' });
 
 // ---------- CONFIG ----------
-// Fill these from TikTok Developer Portal
-const CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;   // aka App ID / Client Key
+const CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;   // App ID / Client Key
 const CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
-const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI; // e.g. https://<your-repl>.repl.co/auth/callback
-// Requested scopes — for Content Posting API you typically need: video.upload, video.publish
+const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI; // e.g. https://gglabbot.onrender.com/auth/callback
 const SCOPES = (process.env.TIKTOK_SCOPES || 'video.upload,video.publish').split(',');
 
-// TikTok endpoints (leave as placeholders; confirm in TikTok docs)
-const TIKTOK_AUTH_URL = 'https://www.tiktok.com/v2/auth/authorize/'; // CHECK docs
-const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/'; // CHECK docs
-// Content Posting API endpoints — placeholders; confirm exact paths in docs
-const TIKTOK_UPLOAD_URL = 'https://open.tiktokapis.com/v2/video/upload/'; // CHECK
-const TIKTOK_PUBLISH_URL = 'https://open.tiktokapis.com/v2/video/publish/'; // CHECK
+// TikTok endpoints (placeholders — confirm in official docs)
+const TIKTOK_AUTH_URL = 'https://www.tiktok.com/v2/auth/authorize/';
+const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
+const TIKTOK_UPLOAD_URL = 'https://open.tiktokapis.com/v2/video/upload/';
+const TIKTOK_PUBLISH_URL = 'https://open.tiktokapis.com/v2/video/publish/';
 
 // In-memory token store for demo (replace with DB in production)
 let oauthState = 'state_' + Math.random().toString(36).slice(2);
@@ -59,14 +65,13 @@ app.get('/auth/callback', async (req, res) => {
   if (error) return res.status(400).send(`<h1>OAuth Error</h1><p>${error}: ${error_description}</p>`);
   if (!code || state !== oauthState) return res.status(400).send('<h1>Invalid OAuth state or missing code</h1>');
   try {
-    // Exchange code for tokens
     const resp = await axios.post(TIKTOK_TOKEN_URL, {
       client_key: CLIENT_KEY,
       client_secret: CLIENT_SECRET,
       code,
       grant_type: 'authorization_code',
       redirect_uri: REDIRECT_URI
-    }, { headers: { 'Content-Type': 'application/json' }});
+    }, { headers: { 'Content-Type': 'application/json' } });
 
     accessToken = resp.data.access_token || null;
     refreshToken = resp.data.refresh_token || null;
@@ -87,12 +92,9 @@ app.post('/upload', upload.single('video'), async (req, res) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Not authorized. Go to /auth first.' });
   if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
   try {
-    // NOTE: replace with real multipart/form-data upload to TikTok Upload API
-    // This is a stub to show the flow.
     const filePath = req.file.path;
-    // Example: const resp = await axios.post(TIKTOK_UPLOAD_URL, formData, { headers: { Authorization: `Bearer ${accessToken}` } });
+    // TODO: call TikTok upload API with multipart/form-data using accessToken
     const fakeUploadId = 'upload_' + Date.now();
-
     res.json({ ok: true, message: 'Demo upload stub — integrate TikTok upload here.', upload_id: fakeUploadId, local_file: filePath });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -105,8 +107,7 @@ app.post('/publish', async (req, res) => {
   const { upload_id, caption = '' } = req.body;
   if (!upload_id) return res.status(400).json({ ok: false, error: 'upload_id is required' });
   try {
-    // NOTE: replace with real call to TikTok publish API with metadata
-    // Example: await axios.post(TIKTOK_PUBLISH_URL, { upload_id, caption }, { headers: { Authorization: `Bearer ${accessToken}` }});
+    // TODO: call TikTok publish API with accessToken + metadata
     const fakeVideoId = 'video_' + Date.now();
     res.json({ ok: true, message: 'Demo publish stub — integrate TikTok publish here.', video_id: fakeVideoId });
   } catch (e) {
@@ -117,6 +118,8 @@ app.post('/publish', async (req, res) => {
 // Health
 app.get('/health', (_, res) => res.json({ ok: true }));
 
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
+// Bind to all interfaces for Render
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
 });
+
