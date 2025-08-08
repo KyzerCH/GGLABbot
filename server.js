@@ -14,12 +14,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static('public'));
 
-// --- TikTok Webhook (NEW) ---
-// TikTok will POST events here. Also respond to GET so the "Test URL" button works.
-app.get('/webhook/tiktok', (req, res) => res.status(200).send('OK'));
-app.post('/webhook/tiktok', (req, res) => {
-  console.log('TikTok Webhook Event:', req.body);
-  // TODO: add signature verification when you’re ready
+// --- TikTok Webhook ---
+// Accept both GET (Test URL) and POST (real events) and always return 200 fast.
+app.all('/webhook/tiktok', (req, res) => {
+  console.log('TikTok Webhook Hit:', req.method, req.headers['content-type'], req.body);
   res.status(200).send('OK');
 });
 
@@ -45,7 +43,8 @@ let refreshToken = null;
 
 // ---------- VIEWS ----------
 app.get('/', (req, res) => {
-  res.sendFile(path.resolve('views/index.html'));
+  // Serve the root index.html (no views/ folder needed)
+  res.sendFile(path.resolve('index.html'));
 });
 
 // 1) Start OAuth
@@ -122,4 +121,3 @@ app.get('/health', (_, res) => res.json({ ok: true }));
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
-
