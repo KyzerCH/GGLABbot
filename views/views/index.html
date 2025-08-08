@@ -1,1 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>TikTok Auto Poster (Demo)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; max-width: 720px; }
+    label { display:block; margin: 8px 0 4px; }
+    input[type="file"] { margin-bottom: 12px; }
+    button { padding: 10px 16px; cursor:pointer; }
+    .row { margin-top: 20px; }
+    code { background: #f7f7f7; padding: 2px 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>TikTok Auto Poster (Demo)</h1>
+    <p>1) <a href="/auth">Sign in with TikTok</a></p>
+    <hr/>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <label>Select video</label>
+      <input type="file" name="video" accept="video/*" required />
+      <label>Caption</label>
+      <input type="text" name="caption" placeholder="Write a caption..." />
+      <div class="row">
+        <button type="submit">Upload</button>
+      </div>
+    </form>
+    <div id="result" class="row"></div>
+  </div>
 
+<script>
+const form = document.getElementById('uploadForm');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const res = await fetch('/upload', { method: 'POST', body: fd });
+  const data = await res.json();
+  document.getElementById('result').innerHTML = '<pre>'+JSON.stringify(data, null, 2)+'</pre>';
+  if (data.upload_id) {
+    const caption = form.caption.value || '';
+    const pub = await fetch('/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ upload_id: data.upload_id, caption })
+    });
+    const pubData = await pub.json();
+    document.getElementById('result').innerHTML += '<pre>'+JSON.stringify(pubData, null, 2)+'</pre>';
+  }
+});
+</script>
+</body>
+</html>
