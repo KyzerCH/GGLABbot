@@ -41,3 +41,31 @@
   </script>
 </body>
 </html>
+<h2>Upload to TikTok</h2>
+<form action="/upload" method="post" enctype="multipart/form-data">
+  <input type="file" name="video" accept="video/mp4,video/quicktime" required />
+  <button type="submit">Upload</button>
+</form>
+
+<h2>Publish</h2>
+<form onsubmit="event.preventDefault(); publish()">
+  <input id="uploadId" placeholder="Paste upload_id from /upload response" required />
+  <input id="caption"   placeholder="Caption (optional)" />
+  <button type="submit">Publish</button>
+</form>
+
+<script>
+async function publish() {
+  const body = {
+    upload_id: document.getElementById('uploadId').value,
+    caption:   document.getElementById('caption').value
+  };
+  const r = await fetch('/publish', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  const j = await r.json();
+  alert(JSON.stringify(j, null, 2));
+}
+</script>
