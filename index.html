@@ -1,26 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>TikTok Login Test</title>
+  <meta charset="UTF-8" />
+  <title>TikTok Login Test</title>
 </head>
 <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
-    <h1>Login with TikTok</h1>
-    <button id="loginBtn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
-        Login with TikTok
-    </button>
+  <h1>Login with TikTok</h1>
+  <button id="loginBtn" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">
+    Login with TikTok
+  </button>
 
-    <script>
-        const clientKey = "sbawfljgq9n370anqa"; // Your TikTok App's Client Key
-        const redirectUri = encodeURIComponent("https://kyzerch.github.io/GGLABbot/callback.html");
-        const scope = "user.info.basic";
-        const state = "test123"; // Random string for CSRF protection
+  <script>
+    // Your TikTok App's Client Key
+    const clientKey = "sbawfljgq9n370anqa";
 
-        document.getElementById("loginBtn").onclick = function () {
-            const authUrl = `https://www.tiktok.com/auth/authorize/?client_key=${clientKey}&scope=${scope}&response_type=code&redirect_uri=${redirectUri}&state=${state}`;
-            window.location.href = authUrl;
-        };
-    </script>
+    // *** MUST be EXACTLY this — no ?state, no extra query ***
+    const redirectUri = encodeURIComponent("https://kyzerch.github.io/GGLABbot/callback.html");
+
+    // Keep state ONLY here, not inside redirectUri
+    const scope = "user.info.basic";
+    const state = "test123";
+
+    document.getElementById("loginBtn").onclick = function () {
+      const authUrl =
+        `https://www.tiktok.com/v2/auth/authorize/` +
+        `?client_key=${clientKey}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&response_type=code` +
+        `&redirect_uri=${redirectUri}` +
+        `&state=${encodeURIComponent(state)}`;
+
+      window.location.href = authUrl;
+    };
+  </script>
 </body>
 </html>
-
