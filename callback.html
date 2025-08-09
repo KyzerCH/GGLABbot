@@ -1,45 +1,110 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Login Callback</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin-top: 50px;
-        }
-        .box {
-            border: 1px solid #ccc;
-            padding: 20px;
-            border-radius: 10px;
-            display: inline-block;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TikTok OAuth Callback</title>
+  <style>
+    :root {
+      --bg:#0f0f10; --fg:#e9eef2; --muted:#9aa5b1; --ok:#16a34a; --err:#ef4444; --card:#16181d; --accent:#60a5fa;
+    }
+    html,body {background:var(--bg); color:var(--fg); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";}
+    .wrap {max-width: 920px; margin: 40px auto; padding: 0 16px;}
+    .card {background: var(--card); border:1px solid #242732; border-radius: 14px; padding: 22px;}
+    h1 {font-size: 24px; margin: 0 0 8px;}
+    .muted {color: var(--muted);}
+    pre {background:#0c0d10; padding:14px; border-radius:10px; overflow:auto; border:1px solid #22252f;}
+    .row {display:flex; gap:10px; align-items:center; margin-top: 12px; flex-wrap:wrap;}
+    button, a.btn {
+      background:#1f2937; color:#fff; border:none; border-radius:10px; padding:10px 14px; cursor:pointer;
+      text-decoration:none; display:inline-flex; align-items:center; gap:8px;
+    }
+    button:hover, a.btn:hover {background:#273040}
+    .good {color: var(--ok)}
+    .bad {color: var(--err)}
+    .accent {color: var(--accent)}
+    .mono {font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;}
+  </style>
 </head>
 <body>
-    <div class="box">
-        <h2>Login Successful</h2>
-        <p>You have been redirected from TikTok.</p>
-        <p id="code"></p>
+  <div class="wrap">
+    <div class="card">
+      <h1>TikTok Login Callback</h1>
+      <div id="status" class="muted">Waiting for authorization code…</div>
+
+      <div id="result" style="margin-top:14px; display:none;">
+        <pre id="json"></pre>
+        <div class="row">
+          <button id="copyAccess" style="display:none;">Copy access_token</button>
+          <a class="btn" href="https://kyzerch.github.io/GGLABbot/" id="backHome">← Back to app</a>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <script>
-        // Extract query params from TikTok (e.g., code=xxx&state=xxx)
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get("code");
-        const state = params.get("state");
+  <script>
+    (async function () {
+      const params = new URLSearchParams(location.search);
+      const statusEl = document.getElementById('status');
+      const resultEl = document.getElementById('result');
+      const jsonEl = document.getElementById('json');
+      const copyBtn = document.getElementById('copyAccess');
 
-        if (code) {
-            document.getElementById("code").innerHTML = `<strong>Authorization Code:</strong> ${code}`;
-            console.log("Authorization Code:", code);
+      const BACKEND_EXCHANGE = 'https://gglabbot.onrender.com/oauth/exchange';
+      const REDIRECT_URI = 'https://kyzerch.github.io/GGLABbot/callback.html';
+
+      const err = params.get('error');
+      const errDesc = params.get('error_description');
+      const code = params.get('code');
+      const state = params.get('state');
+
+      if (err) {
+        statusEl.innerHTML = `<strong class="bad">Login Error:</strong> ${err} <span class="muted">(${errDesc || 'no description'})</span>`;
+        return;
+      }
+
+      if (!code) {
+        statusEl.innerHTML = `<span class="bad">No authorization code found.</span>
+          <div class="muted">Make sure your TikTok app redirect URI is set to <span class="mono accent">${REDIRECT_URI}</span>.</div>`;
+        return;
+      }
+
+      // We have a code — exchange it for tokens
+      statusEl.innerHTML = `<span class="accent">Exchanging authorization code for tokens…</span>`;
+
+      try {
+        const res = await fetch(BACKEND_EXCHANGE, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            code,
+            redirect_uri: REDIRECT_URI
+          })
+        });
+
+        const data = await res.json();
+        resultEl.style.display = 'block';
+        jsonEl.textContent = JSON.stringify(data, null, 2);
+
+        if (data.ok && data.data && data.data.access_token) {
+          statusEl.innerHTML = `<span class="good">Login Successful!</span> Access token received.`;
+          // Optional: keep it for demo sessions (NOT for production)
+          try { localStorage.setItem('tiktok_access_token', data.data.access_token); } catch {}
+          copyBtn.style.display = 'inline-flex';
+          copyBtn.onclick = async () => {
+            await navigator.clipboard.writeText(data.data.access_token);
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = 'Copy access_token', 1200);
+          };
         } else {
-            document.getElementById("code").innerHTML = "No authorization code found.";
+          statusEl.innerHTML = `<span class="bad">Token exchange failed.</span> See details below.`;
         }
-
-        // You can send 'code' to your backend here if needed
-        // fetch('/your-backend-endpoint', { method: 'POST', body: JSON.stringify({ code, state }) })
-    </script>
+      } catch (e) {
+        resultEl.style.display = 'block';
+        statusEl.innerHTML = `<span class="bad">Network or server error during exchange.</span>`;
+        jsonEl.textContent = (e && e.message) ? e.message : String(e);
+      }
+    })();
+  </script>
 </body>
 </html>
