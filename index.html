@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>TikTok Login Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body style="font-family: Arial, sans-serif; text-align: center; margin-top: 50px;">
   <h1>Login with TikTok</h1>
@@ -10,26 +11,31 @@
     Login with TikTok
   </button>
 
+  <pre id="debug" style="margin-top:24px; text-align:left; width:90%; max-width:800px; margin-left:auto; margin-right:auto; background:#f8f8f8; padding:12px; border:1px solid #ddd; overflow:auto;"></pre>
+
   <script>
-    // Your TikTok App's Client Key
+    // Your TikTok App's Client Key (this is fine to be public)
     const clientKey = "sbawfljgq9n370anqa";
 
-    // *** MUST be EXACTLY this — no ?state, no extra query ***
-    const redirectUri = encodeURIComponent("https://kyzerch.github.io/GGLABbot/callback.html");
+    // *** MUST be EXACTLY this — no query params, no ?state ***
+    const redirectUri = "https://kyzerch.github.io/GGLABbot/callback.html";
 
-    // Keep state ONLY here, not inside redirectUri
+    // Only put state as a separate param (NOT inside redirect_uri)
     const scope = "user.info.basic";
     const state = "test123";
 
-    document.getElementById("loginBtn").onclick = function () {
-      const authUrl =
-        `https://www.tiktok.com/v2/auth/authorize/` +
-        `?client_key=${clientKey}` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&response_type=code` +
-        `&redirect_uri=${redirectUri}` +
-        `&state=${encodeURIComponent(state)}`;
+    const authUrl =
+      "https://www.tiktok.com/v2/auth/authorize/" +
+      "?client_key=" + encodeURIComponent(clientKey) +
+      "&scope=" + encodeURIComponent(scope) +
+      "&response_type=code" +
+      "&redirect_uri=" + encodeURIComponent(redirectUri) +
+      "&state=" + encodeURIComponent(state);
 
+    document.getElementById("debug").textContent =
+      "Auth URL that will be used:\n\n" + authUrl;
+
+    document.getElementById("loginBtn").onclick = function () {
       window.location.href = authUrl;
     };
   </script>
