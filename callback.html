@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Login Callback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .box {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>Login Successful</h2>
+        <p>You have been redirected from TikTok.</p>
+        <p id="code"></p>
+    </div>
+
+    <script>
+        // Extract query params from TikTok (e.g., code=xxx&state=xxx)
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const state = params.get("state");
+
+        if (code) {
+            document.getElementById("code").innerHTML = `<strong>Authorization Code:</strong> ${code}`;
+            console.log("Authorization Code:", code);
+        } else {
+            document.getElementById("code").innerHTML = "No authorization code found.";
+        }
+
+        // You can send 'code' to your backend here if needed
+        // fetch('/your-backend-endpoint', { method: 'POST', body: JSON.stringify({ code, state }) })
+    </script>
+</body>
+</html>
