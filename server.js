@@ -141,3 +141,27 @@ app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
 
+app.get('/auth/refresh', async (req, res) => {
+  try {
+    if (!refreshToken) return res.status(400).send('No refresh token yet');
+
+    const form = new URLSearchParams();
+    form.append('client_key',    CLIENT_KEY);
+    form.append('client_secret', CLIENT_SECRET);
+    form.append('grant_type',    'refresh_token');
+    form.append('refresh_token', refreshToken);
+
+    const resp = await axios.post(
+      TIKTOK_TOKEN_URL,
+      form.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    accessToken  = resp.data.access_token || accessToken;
+    refreshToken = resp.data.refresh_token || refreshToken;
+
+    res.json({ ok: true, tokens: resp.data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e?.response?.data || e.message });
+  }
+});
