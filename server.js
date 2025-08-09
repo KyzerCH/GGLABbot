@@ -1,3 +1,4 @@
+// server.js
 import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
@@ -9,45 +10,44 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Static + parsing
+// -------------------- Middleware / static --------------------
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use('/public', express.static('public'));
 
-// --- TikTok Webhook ---
-// Accept both GET (Test URL) and POST (real events) and always return 200 fast.
+// -------------------- Webhook (OK for Test URL) --------------------
 app.all('/webhook/tiktok', (req, res) => {
   console.log('TikTok Webhook Hit:', req.method, req.headers['content-type'], req.body);
   res.status(200).send('OK');
 });
 
-// Simple storage for demo uploads (memory or disk)
+// -------------------- Upload helper --------------------
 const upload = multer({ dest: 'uploads/' });
 
-// ---------- CONFIG ----------
-const CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;   // App ID / Client Key
+// -------------------- Config --------------------
+const CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;
 const CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
 const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI; // e.g. https://gglabbot.onrender.com/auth/callback
 const SCOPES = (process.env.TIKTOK_SCOPES || 'video.upload,video.publish').split(',');
 
-// TikTok endpoints (placeholders — confirm in official docs)
-const TIKTOK_AUTH_URL = 'https://www.tiktok.com/v2/auth/authorize/';
-const TIKTOK_TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
+// TikTok endpoints (check docs for changes)
+const TIKTOK_AUTH_URL   = 'https://www.tiktok.com/v2/auth/authorize/';
+const TIKTOK_TOKEN_URL  = 'https://open.tiktokapis.com/v2/oauth/token/';
 const TIKTOK_UPLOAD_URL = 'https://open.tiktokapis.com/v2/video/upload/';
-const TIKTOK_PUBLISH_URL = 'https://open.tiktokapis.com/v2/video/publish/';
+const TIKTOK_PUBLISH_URL= 'https://open.tiktokapis.com/v2/video/publish/';
 
-// In-memory token store for demo (replace with DB in production)
-let oauthState = 'state_' + Math.random().toString(36).slice(2);
-let accessToken = null;
+// In-memory tokens (replace with DB in production)
+let oauthState   = 'state_' + Math.random().toString(36).slice(2);
+let accessToken  = null;
 let refreshToken = null;
 
-// ---------- VIEWS ----------
+// -------------------- Views --------------------
 app.get('/', (req, res) => {
-  // Serve the root index.html (no views/ folder needed)
+  // Serve your root index.html (no /views folder needed)
   res.sendFile(path.resolve('index.html'));
 });
 
-// 1) Start OAuth
+// -------------------- 1) Start OAuth --------------------
 app.get('/auth', (req, res) => {
   const authUrl = new URL(TIKTOK_AUTH_URL);
   authUrl.searchParams.set('client_key', CLIENT_KEY);
@@ -58,21 +58,33 @@ app.get('/auth', (req, res) => {
   return res.redirect(authUrl.toString());
 });
 
-// 2) OAuth callback
+// -------------------- 2) OAuth callback (EXCHANGE CODE → TOKEN) --------------------
 app.get('/auth/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
-  if (error) return res.status(400).send(`<h1>OAuth Error</h1><p>${error}: ${error_description}</p>`);
-  if (!code || state !== oauthState) return res.status(400).send('<h1>Invalid OAuth state or missing code</h1>');
-  try {
-    const resp = await axios.post(TIKTOK_TOKEN_URL, {
-      client_key: CLIENT_KEY,
-      client_secret: CLIENT_SECRET,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: REDIRECT_URI
-    }, { headers: { 'Content-Type': 'application/json' } });
 
-    accessToken = resp.data.access_token || null;
+  if (error) {
+    return res.status(400).send(`<h1>OAuth Error</h1><p>${error}: ${error_description}</p>`);
+  }
+  if (!code || state !== oauthState) {
+    return res.status(400).send('Invalid OAuth state or missing code');
+  }
+
+  try {
+    // TikTok requires x-www-form-urlencoded (NOT JSON)
+    const form = new URLSearchParams();
+    form.append('client_key',    CLIENT_KEY);
+    form.append('client_secret', CLIENT_SECRET);
+    form.append('code',          code);
+    form.append('grant_type',    'authorization_code');
+    form.append('redirect_uri',  REDIRECT_URI);
+
+    const resp = await axios.post(
+      TIKTOK_TOKEN_URL,
+      form.toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+
+    accessToken  = resp.data.access_token || null;
     refreshToken = resp.data.refresh_token || null;
 
     res.send(`
@@ -82,17 +94,22 @@ app.get('/auth/callback', async (req, res) => {
       <pre>${JSON.stringify(resp.data, null, 2)}</pre>
     `);
   } catch (e) {
-    res.status(500).send(`<h1>Token exchange failed</h1><pre>${e?.response?.data ? JSON.stringify(e.response.data,null,2) : e.message}</pre>`);
+    res.status(500).send(
+      `<h1>Token exchange failed</h1><pre>${
+        e?.response?.data ? JSON.stringify(e.response.data, null, 2) : e.message
+      }</pre>`
+    );
   }
 });
 
-// 3) Upload endpoint (demo)
+// -------------------- 3) Upload (demo stub) --------------------
 app.post('/upload', upload.single('video'), async (req, res) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Not authorized. Go to /auth first.' });
-  if (!req.file) return res.status(400).json({ ok: false, error: 'No file uploaded' });
+  if (!req.file)     return res.status(400).json({ ok: false, error: 'No file uploaded' });
+
   try {
     const filePath = req.file.path;
-    // TODO: call TikTok upload API with multipart/form-data using accessToken
+    // TODO: call TikTok upload API (multipart/form-data) with accessToken + file stream
     const fakeUploadId = 'upload_' + Date.now();
     res.json({ ok: true, message: 'Demo upload stub — integrate TikTok upload here.', upload_id: fakeUploadId, local_file: filePath });
   } catch (e) {
@@ -100,11 +117,13 @@ app.post('/upload', upload.single('video'), async (req, res) => {
   }
 });
 
-// 4) Publish endpoint (demo)
+// -------------------- 4) Publish (demo stub) --------------------
 app.post('/publish', async (req, res) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Not authorized. Go to /auth first.' });
+
   const { upload_id, caption = '' } = req.body;
   if (!upload_id) return res.status(400).json({ ok: false, error: 'upload_id is required' });
+
   try {
     // TODO: call TikTok publish API with accessToken + metadata
     const fakeVideoId = 'video_' + Date.now();
@@ -114,10 +133,11 @@ app.post('/publish', async (req, res) => {
   }
 });
 
-// Health
+// -------------------- Health --------------------
 app.get('/health', (_, res) => res.json({ ok: true }));
 
-// Bind to all interfaces for Render
+// -------------------- Start --------------------
 app.listen(port, '0.0.0.0', () => {
   console.log(`Server running on port ${port}`);
 });
+
