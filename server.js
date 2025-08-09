@@ -5,6 +5,7 @@ import axios from 'axios';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import FormData from 'form-data';
 
 dotenv.config();
 const app = express();
@@ -31,10 +32,13 @@ const REDIRECT_URI = process.env.TIKTOK_REDIRECT_URI; // e.g. https://gglabbot.o
 const SCOPES = (process.env.TIKTOK_SCOPES || 'video.upload,video.publish').split(',');
 
 // TikTok endpoints (check docs for changes)
-const TIKTOK_AUTH_URL   = 'https://www.tiktok.com/v2/auth/authorize/';
-const TIKTOK_TOKEN_URL  = 'https://open.tiktokapis.com/v2/oauth/token/';
-const TIKTOK_UPLOAD_URL = 'https://open.tiktokapis.com/v2/video/upload/';
-const TIKTOK_PUBLISH_URL= 'https://open.tiktokapis.com/v2/video/publish/';
+const TIKTOK_AUTH_URL    = 'https://www.tiktok.com/v2/auth/authorize/';
+const TIKTOK_TOKEN_URL   = 'https://open.tiktokapis.com/v2/oauth/token/';
+
+// NOTE: These endpoints are representative. If your app docs show different paths,
+// use those instead. The “upload” call is multipart/form-data and returns an upload_id.
+const TIKTOK_UPLOAD_URL  = 'https://open.tiktokapis.com/v2/video/upload/';
+const TIKTOK_PUBLISH_URL = 'https://open.tiktokapis.com/v2/video/publish/';
 
 // In-memory tokens (replace with DB in production)
 let oauthState   = 'state_' + Math.random().toString(36).slice(2);
@@ -102,22 +106,46 @@ app.get('/auth/callback', async (req, res) => {
   }
 });
 
-// -------------------- 3) Upload (demo stub) --------------------
+// -------------------- 3) Upload (real multipart/form-data) --------------------
 app.post('/upload', upload.single('video'), async (req, res) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Not authorized. Go to /auth first.' });
   if (!req.file)     return res.status(400).json({ ok: false, error: 'No file uploaded' });
 
+  const filePath = req.file.path;
+
   try {
-    const filePath = req.file.path;
-    // TODO: call TikTok upload API (multipart/form-data) with accessToken + file stream
-    const fakeUploadId = 'upload_' + Date.now();
-    res.json({ ok: true, message: 'Demo upload stub — integrate TikTok upload here.', upload_id: fakeUploadId, local_file: filePath });
+    const form = new FormData();
+    // Field name must match what TikTok expects for the binary.
+    // Most examples use "video" or "file"; check your API docs.
+    form.append('video', fs.createReadStream(filePath));
+
+    const uploadResp = await axios.post(TIKTOK_UPLOAD_URL, form, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...form.getHeaders(),
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    // Clean up local temp file
+    try { fs.unlinkSync(filePath); } catch {}
+
+    return res.json({
+      ok: true,
+      message: 'Upload success',
+      tiktok_response: uploadResp.data,
+    });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    try { fs.unlinkSync(filePath); } catch {}
+    return res.status(500).json({
+      ok: false,
+      error: e?.response?.data || e.message,
+    });
   }
 });
 
-// -------------------- 4) Publish (demo stub) --------------------
+// -------------------- 4) Publish (uses upload_id from /upload) --------------------
 app.post('/publish', async (req, res) => {
   if (!accessToken) return res.status(401).json({ ok: false, error: 'Not authorized. Go to /auth first.' });
 
@@ -125,22 +153,39 @@ app.post('/publish', async (req, res) => {
   if (!upload_id) return res.status(400).json({ ok: false, error: 'upload_id is required' });
 
   try {
-    // TODO: call TikTok publish API with accessToken + metadata
-    const fakeVideoId = 'video_' + Date.now();
-    res.json({ ok: true, message: 'Demo publish stub — integrate TikTok publish here.', video_id: fakeVideoId });
+    // A typical publish body—adjust fields to match TikTok’s current API.
+    const body = {
+      upload_id,
+      caption,
+      // privacy_level: 'PUBLIC', // example; include if your app requires
+    };
+
+    const publishResp = await axios.post(TIKTOK_PUBLISH_URL, body, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    return res.json({
+      ok: true,
+      message: 'Publish success',
+      tiktok_response: publishResp.data,
+    });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    return res.status(500).json({
+      ok: false,
+      error: e?.response?.data || e.message,
+    });
   }
 });
 
 // -------------------- Health --------------------
 app.get('/health', (_, res) => res.json({ ok: true }));
 
-// -------------------- Start --------------------
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on port ${port}`);
-});
-
+// -------------------- Token refresh (optional) --------------------
 app.get('/auth/refresh', async (req, res) => {
   try {
     if (!refreshToken) return res.status(400).send('No refresh token yet');
@@ -164,4 +209,9 @@ app.get('/auth/refresh', async (req, res) => {
   } catch (e) {
     res.status(500).json({ ok: false, error: e?.response?.data || e.message });
   }
+});
+
+// -------------------- Start --------------------
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
 });
